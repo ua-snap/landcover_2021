@@ -1,6 +1,9 @@
 #!/bin/bash
-# Turn the warped intermediate into the final drop-in GeoTIFF: color table, overviews, nodata tag.
-# The -128 nodata tag MUST be the last step: gdalwarp/gdal_translate clamp -128 to 0 on Byte data.
+# Turn the warped intermediate into the final drop-in GeoTIFF, laid out like the 2015 file:
+# signed 8-bit (Int8), palette, nodata -128, LZW, 128x128 tiles, BigTIFF, no overviews.
+# GDAL only writes a palette on signed 8-bit data through gdal_translate with the deprecated
+# PIXELTYPE=SIGNEDBYTE option (SetColorTable on an Int8 band is refused), so the color table and
+# the -128 tag are set on the unsigned intermediate first and the copy reinterprets 128 as -128.
 # Usage: DATA_DIR=/path/to/data scripts/finalize.sh
 set -eo pipefail
 
@@ -14,10 +17,11 @@ DATA_DIR=${DATA_DIR:-/import/beegfs/CMIP6/jdpaul3/landcover_2021_data}
 SRC=$DATA_DIR/work/land_cover_2021_albers_warped.tif
 OUT=$DATA_DIR/output/land_cover_2021_albers.tif
 mkdir -p "$DATA_DIR/output"
+rm -f "$OUT"
 
-cp "$SRC" "$OUT"
-$PY -I "$SCRIPTS/set_colortable.py" "$OUT"
-gdaladdo -r nearest --config COMPRESS_OVERVIEW DEFLATE --config GDAL_NUM_THREADS ALL_CPUS \
-  "$OUT" 2 4 8 16 32 64 128
-gdal_edit.py -a_nodata -128 "$OUT"
+$PY -I "$SCRIPTS/set_colortable.py" "$SRC"
+# gdal_edit, not -a_nodata: gdal_translate/gdalwarp clamp -128 to 0 on Byte
+gdal_edit.py -a_nodata -128 "$SRC"
+gdal_translate -co TILED=YES -co BLOCKXSIZE=128 -co BLOCKYSIZE=128 -co COMPRESS=LZW \
+  -co BIGTIFF=YES -co PIXELTYPE=SIGNEDBYTE "$SRC" "$OUT"
 gdalinfo "$OUT" | grep -vE '^ +[0-9]+: '
