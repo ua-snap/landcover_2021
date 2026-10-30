@@ -6,7 +6,7 @@ are 2020), so the result is named `land_cover_2021_albers.tif`. Only the data ch
 nodata convention and color table all match the 2015 file behind the layer, so the layer's store can point at the new file
 with no style or layer changes.
 
-Data lives outside the repo, in `/import/beegfs/CMIP6/jdpaul3/landcover_2021_data/{raw,work,output,logs}`.
+Outputs live here: `/import/beegfs/CMIP6/jdpaul3/landcover_2021_data/{raw,work,output,logs}`.
 
 ## Inputs
 
