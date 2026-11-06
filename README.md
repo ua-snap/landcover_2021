@@ -6,7 +6,7 @@ are 2020), so the result is named `land_cover_2021_albers.tif`. Only the data ch
 nodata convention and color table all match the 2015 file behind the layer, so the layer's store can point at the new file
 with no style or layer changes.
 
-Data lives outside the repo, in `/import/beegfs/CMIP6/jdpaul3/landcover_2021_data/{raw,work,output,logs}`.
+Outputs live here: `/import/beegfs/CMIP6/jdpaul3/landcover_2021_data/{raw,work,output,logs}`.
 
 ## Inputs
 
@@ -49,6 +49,7 @@ Data lives outside the repo, in `/import/beegfs/CMIP6/jdpaul3/landcover_2021_dat
 4. `verify.py`: compares the output with the 2015 file (structure plus a full-resolution pixel comparison), then cross-checks against the WCS.
    It writes `output/land_cover_2021_albers_verify.txt`.
 5. `compare_map.py`: draws the map below at full resolution from the two files.
+6. `compare_gs_layers.py`: queries the two GeoServer layers and checks every response against its source file (see below).
 
 Environment: the conda env `snap-geo` on Chinook (GDAL 3.7.0). The scripts activate it, and `PROJ_DATA` is only set once it is active.
 
@@ -67,6 +68,23 @@ Run 2026-10-30, Slurm job 738214 (about 11 min). Every check passed. Full report
 - **WCS:** 23 full-resolution strips from GeoServer are identical to the 2015 file, so GeoServer serves that file unchanged (apart from
   reporting EPSG:3338 and -128 as 128). Point checks and the AK/Yukon border transect also agree.
 
+### GeoServer layers
+
+Run 2026-10-30 against `alaska_wildfires:alaska_landcover_2015` and `alaska_wildfires:alaska_landcover_2021` on
+`gs.snap.uaf.edu`. Every check passed. Full report: `output/compare_gs_layers.txt`.
+
+- **WCS:** both layers describe the same grid, CRS (EPSG:3338), band and nodata. Each serves its own file unchanged.
+- **Data API (WMS GetFeatureInfo, same URL as `data-api` `routes/fire.py`):** both layers return the same JSON shape.
+  `PALETTE_INDEX` matches the source file at 200 random land points and at 100 pixels that changed between the years, in both layers.
+  Ocean and Yukon return 0, and outside the source tile returns 128 (the unsigned form of -128), the same in both years.
+- **WMS GetMap:** both layers use the `alaska_landcover` style. Native-resolution tiles from both layers show the style's class colors,
+  with 0 and -128 transparent.
+
+The first run found two differences in the 2021 layer's setup, both since fixed in GeoServer:
+- **Default style:** it was the generic `raster` style, which drew 0 and -128 as opaque black and used the file's own palette
+  for urban areas (red rather than magenta) and snow/ice. The default style is now `alaska_landcover`.
+- **Declared CRS:** it was EPSG:6393. It is now EPSG:3338, as for the 2015 layer.
+
 ### 2015 vs 2021
 
 ![2015 and 2021 land cover and where they differ](docs/landcover_2015_vs_2021.png)
@@ -79,4 +97,5 @@ scattered changed pixels, so blocks with under 5% change are shown gray. The col
 - rasterio and GDAL both read the output as int8 with nodata -128. GeoServer reads the same bytes as unsigned 128, exactly as it
   does for the 2015 file.
 - The grid crosses the antimeridian (the western Aleutians). The data are only warped from one projected CRS to another and never pass through EPSG:4326.
-- Out of scope: the GeoServer swap itself, and updating the layer's title or abstract to say the data are 2021 (NALCMS 2020v2).
+- Out of scope: pointing the data API and apps at the new layer. The data API reads from `gs.earthmaps.io` by default, which did
+  not have `alaska_landcover_2021` as of 2026-10-30.
